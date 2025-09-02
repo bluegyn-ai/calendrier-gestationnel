@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Calendrier Gestationnel</title>
+  <style>
+    :root {
+      --primary: #2c3e50;
+      --accent: #3498db;
+      --highlight: #f1c40f;
+      --success: #27ae60;
+      --warning: #e67e22;
+      --text: #333;
+      --bg: #f9f9f9;
+      --card-bg: #fff;
+      --border: #ddd;
+    }
+    .dark-mode {
+      --primary: #ecf0f1;
+      --accent: #8ab4f8;
+      --highlight: #f39c12;
+      --success: #58d68d;
+      --warning: #f5b041;
+      --text: #ecf0f1;
+      --bg: #1a1a1a;
+      --card-bg: #2d2d2d;
+      --border: #555;
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .container {
+      max-width: 900px;
+      margin: 20px auto;
+      background-color: var(--card-bg);
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 16px;
+      color: var(--accent);
+      margin-bottom: 25px;
+    }
+    .input-group {
+      margin-bottom: 18px;
+    }
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 6px;
+    }
+    input[type="date"] {
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 100%;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+    .result, .info {
+      margin: 12px 0;
+      font-size: 17px;
+      font-weight: 500;
+    }
+    .result { color: var(--success); }
+    .info { color: var(--accent); }
+    .warning { color: var(--warning); font-weight: bold; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.05);
+    }
+    th, td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background-color: var(--primary);
+      color: white;
+    }
+    tr.highlight { background-color: var(--highlight); }
+    tr.warning-row { background-color: #fff3cd; }
+    tr:hover:not(.highlight) { background-color: rgba(52, 152, 219, 0.1); cursor: pointer; }
+    tr.current { background-color: rgba(52, 152, 219, 0.3); font-weight: bold; }
+
+    .btn {
+      display: block;
+      width: 280px;
+      margin: 25px auto;
+      padding: 12px;
+      background-color: var(--accent);
+      color: white;
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn:hover { background-color: #2980b9; }
+    .btn.print { background-color: #27ae60; }
+    .btn.dark { background-color: #555; }
+
+    .toggle-dark {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    .event { font-size: 0.9em; color: #666; font-style: italic; }
+
+    @media print {
+      body * { visibility: hidden; }
+      .print-area, .print-area * { visibility: visible; }
+      .print-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        box-shadow: none;
+      }
+      .input-group, .toggle-dark, .btn { display: none !important; }
+      .warning { color: black !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container print-area">
+    <h1>📅 Calendrier Gestationnel</h1>
+    <p class="subtitle">Suivi personnalisé de la grossesse</p>
+
+    <div class="toggle-dark">
+      <button class="btn dark" id="toggleDark">🌙 Mode sombre</button>
+    </div>
+
+    <div class="input-group">
+      <label for="dateConception">Date de conception (DDG)</label>
+      <input type="date" id="dateConception" />
+    </div>
+
+    <div class="input-group">
+      <label for="dateActuelle">Date du suivi</label>
+      <input type="date" id="dateActuelle" />
+      <div class="info" id="saActuelle">SA correspondant : -</div>
+      <div class="info" id="poidsFetal">Poids fœtal estimé : -</div>
+      <div class="warning" id="alerte">-</div>
+    </div>
+
+    <div class="result">
+      <p><strong>Date prévue d'accouchement (DPA) :</strong> <span id="dpa">-</span></p>
+    </div>
+
+    <table id="tableauSA">
+      <thead>
+        <tr>
+          <th>Semaine d'aménorrhée</th>
+          <th>Date</th>
+          <th>Événements</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+
+    <button id="exportBtn" class="btn print">🖨️ Imprimer / Exporter PDF</button>
+  </div>
+
+  <script>
+    // Données médicales
+    const evenements = {
+      12: "Écho de datation + NT",
+      16: "Consultation intermédiaire",
+      20: "Test de caryotype (si indiqué)",
+      22: "Écho morphologique ⚠️",
+      28: "Recherche d'AGA, ferritine",
+      32: "Contrôle croissance + bien-être fœtal",
+      36: "Écho de contrôle, présentation",
+      38: "Visite hebdomadaire",
+      40: "Surveillance rapprochée si non déclenché"
+    };
+
+    // Fonctions utilitaires
+    function addMonths(date, months) {
+      const newDate = new Date(date);
+      newDate.setMonth(newDate.getMonth() + months);
+      return newDate;
+    }
+
+    function formatDate(date) {
+      if (!date || isNaN(date)) return "-";
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    function getSA(dateActuelle, debutGrossesse) {
+      const diffTime = dateActuelle - debutGrossesse;
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      const sa = Math.round(diffDays / 7);
+      return isNaN(sa) ? 0 : sa;
+    }
+
+    function getPoidsFetal(sa) {
+      if (sa < 12) return 50;
+      if (sa < 22) return Math.round(50 + ((sa - 12) / 10) * 450);
+      if (sa < 32) return Math.round(500 + ((sa - 22) / 10) * 1200);
+      if (sa < 40) return Math.round(1700 + ((sa - 32) / 8) * 1700);
+      return 3400;
+    }
+
+    function getEvenement(sa) {
+      return evenements[sa] || "";
+    }
+
+    // Mise à jour principale
+    function updateCalendrier() {
+      const dateConceptionStr = document.getElementById("dateConception").value;
+      const dateActuelleStr = document.getElementById("dateActuelle").value;
+      const dateActuelle = dateActuelleStr ? new Date(dateActuelleStr) : new Date();
+
+      if (dateConceptionStr) {
+        const ddg = new Date(dateConceptionStr);
+        const dpa = addMonths(ddg, 9);
+        document.getElementById("dpa").textContent = formatDate(dpa);
+
+        const debutGrossesse = new Date(ddg);
+        debutGrossesse.setDate(debutGrossesse.getDate() - 14);
+
+        const tbody = document.querySelector("#tableauSA tbody");
+        tbody.innerHTML = "";
+
+        let currentSA = null;
+        let alerteText = "-";
+
+        for (let semaine = 6; semaine <= 42; semaine++) {
+          const dateSA = new Date(debutGrossesse);
+          dateSA.setDate(dateSA.getDate() + (semaine * 7));
+
+          const tr = document.createElement("tr");
+          tr.dataset.date = dateSA.toISOString().split('T')[0];
+
+          if ([12, 22, 32].includes(semaine)) {
+            tr.classList.add("highlight");
+          }
+
+          if (dateSA <= dateActuelle && new Date(dateActuelleStr || new Date()) >= dateSA) {
+            tr.classList.add("current");
+            currentSA = semaine;
+          }
+
+          // Alertes
+          if (semaine === 22 && dateActuelle > dateSA) {
+            const diffDays = Math.floor((dateActuelle - dateSA) / (1000*60*60*24));
+            if (diffDays > 14) {
+              alerteText = `⚠️ L'échographie morphologique est en retard de ${Math.round(diffDays/7)} semaine(s).`;
+            }
+          }
+
+          const tdSA = document.createElement("td");
+          tdSA.textContent = `SA ${semaine}`;
+
+          const tdDate = document.createElement("td");
+          tdDate.textContent = formatDate(dateSA);
+
+          const tdEvent = document.createElement("td");
+          const event = getEvenement(semaine);
+          tdEvent.className = "event";
+          tdEvent.textContent = event;
+
+          tr.appendChild(tdSA);
+          tr.appendChild(tdDate);
+          tr.appendChild(tdEvent);
+          tbody.appendChild(tr);
+
+          tr.addEventListener("click", () => {
+            document.getElementById("dateActuelle").value = tr.dataset.date;
+            updateCalendrier();
+          });
+        }
+
+        const sa = getSA(dateActuelle, debutGrossesse);
+        const poids = getPoidsFetal(sa);
+
+        document.getElementById("saActuelle").textContent = `SA actuelle : SA ${sa}`;
+        document.getElementById("poidsFetal").textContent = `Poids fœtal estimé : ${poids} g`;
+        document.getElementById("alerte").textContent = alerteText;
+
+        // Sauvegarde
+        localStorage.setItem("gest_cal_ddg", dateConceptionStr);
+        localStorage.setItem("gest_cal_date", dateActuelleStr);
+      } else {
+        document.getElementById("dpa").textContent = "-";
+        document.getElementById("saActuelle").textContent = "SA actuelle : -";
+        document.getElementById("poidsFetal").textContent = "Poids fœtal estimé : -";
+        document.getElementById("alerte").textContent = "-";
+        document.querySelector("#tableauSA tbody").innerHTML = "";
+      }
+    }
+
+    // Initialisation
+    window.onload = function () {
+      const today = new Date();
+      const ddgDefault = new Date(today);
+      ddgDefault.setDate(ddgDefault.getDate() - 42);
+
+      // Charger depuis localStorage
+      const savedDDG = localStorage.getItem("gest_cal_ddg");
+      const savedDate = localStorage.getItem("gest_cal_date");
+
+      document.getElementById("dateConception").value = savedDDG || ddgDefault.toISOString().split('T')[0];
+      document.getElementById("dateActuelle").value = savedDate || today.toISOString().split('T')[0];
+
+      // Mode sombre
+      if (localStorage.getItem("darkMode") === "true") {
+        document.body.classList.add("dark-mode");
+        document.getElementById("toggleDark").querySelector("button").textContent = "☀️ Mode clair";
+      }
+
+      updateCalendrier();
+    };
+
+    // Écouteurs
+    document.getElementById("dateConception").addEventListener("change", updateCalendrier);
+    document.getElementById("dateActuelle").addEventListener("change", updateCalendrier);
+
+    document.getElementById("exportBtn").addEventListener("click", () => window.print());
+
+    document.getElementById("toggleDark").addEventListener("click", function () {
+      document.body.classList.toggle("dark-mode");
+      const isDark = document.body.classList.contains("dark-mode");
+      localStorage.setItem("darkMode", isDark);
+      document.getElementById("toggleDark").querySelector("button").textContent = isDark ? "☀️ Mode clair" : "🌙 Mode sombre";
+    });
+  </script>
+</body>
+</html>
